@@ -1,6 +1,6 @@
 # Enterprise VPN Appliance - Testing Guide & Concepts
 
-This guide is designed for testing the appliance on a fresh Linux machine using the **Docker Image** method. It also simplifies key concepts so you understand exactly what is happening during setup and policy creation.
+This guide is designed for testing the appliance on a fresh Linux machine using the **Docker Image** method. It simplifies key concepts and explains **every input field** so you know exactly what to select.
 
 ---
 
@@ -10,7 +10,7 @@ Before deploying, it helps to understand the terminology using a **"Secure Build
 
 ### 1. The Endpoint (The Front Door)
 *   **What is it?** This is the **Public Address** of your VPN server. You enter this during the "Initial Setup".
-*   **Analogy:** The **street address** of the building (e.g., `200 Main St` or `vpn.mycompany.com`).
+*   **Analogy:** The **street address** of the building (e.g., `203.0.113.50` or `vpn.mycompany.com`).
 *   **Why it matters:** If you don't give your users the right address, they can't find the building to knock on the door.
 
 ### 2. The User Connection (Entering the Building)
@@ -84,49 +84,98 @@ sudo docker run -d \
 
 ---
 
-## ⚙️ Part 4: Initial Setup
+## ⚙️ Part 4: Initial Setup Wizard - Detailed Explanation
 
 1.  Open your browser on your PC.
-2.  Go to: `http://<YOUR_LINUX_IP>:8000` (Use the IP you found in Part 2).
-3.  **Setup Wizard Steps**:
-    *   **Admin Account**: Set a username/password.
-    *   **Endpoint Address**: The wizard usually auto-detects this. It should be the same **Public IP** or **DNS** that external users will use to reach this server.
-        *   *If testing locally on LAN, use the IP from `hostname -I`.*
-    *   **Finish**: The dashboard will load.
+2.  Go to: `http://<YOUR_LINUX_IP>:8000` (The IP you found in Part 2).
+3.  **Step 1: Initialize System**
+    *   Click **Initialize System**. This generates the secret encryption keys for the server.
+4.  **Step 2: Network Configuration** (Crucial Step)
+    *   **Endpoint (Public IP or Domain)**:
+        *   *What is it?* The public address users will connect to.
+        *   *What to enter?* 
+            *   If testing on **LAN/Home**: Enter the IP from Part 2 (e.g., `192.168.1.50:51820`).
+            *   If using a **Cloud VPS** (AWS/DigitalOcean): Enter the Public IP (e.g., `203.0.113.5:51820`).
+    *   **VPN Subnet**:
+        *   *Default*: `10.0.0.0/24`
+        *   *Meaning*: The "virtual" IP addresses assigned to VPN users.
+        *   *Advice*: Leave as default unless it conflicts with your home network.
+    *   **Client DNS**:
+        *   *Default*: Empty.
+        *   *Meaning*: Which DNS server VPN users will use (e.g., `8.8.8.8`).
+        *   *Advice*: Leave empty to let the appliance handle it automatically.
+5.  **Step 3: Admin Account**
+    *   Create your login credentials for the dashboard.
 
 ---
 
-## 🛡️ Part 5: Testing Policies
+## 🛡️ Part 5: Creating Policies - Detailed Explanation
 
-Now you act as the "Security Guard".
+Go to **Policies** > **Create Policy** on the dashboard. Here is what every field implies:
 
-### Scenario A: The "Blacklist" (Block a Bad Server)
-**Concept**: "Let everyone go anywhere, EXCEPT this one dangerous room."
+### 1. Name
+*   **What is it?** A label for you to remember.
+*   **Example**: `Allow SSH to Database`
 
-1.  Go to **Policies** > **Create Policy**.
-2.  **Name**: `Block Bad Server`
-3.  **Applies To**: `All Users`
-4.  **Destination**: `1.2.3.4/32` (This is the specific "Bad Room").
-5.  **Action**: `Deny`
-6.  **Click Create**.
-    *   *Test it*: Connect to VPN, try `ping 1.2.3.4`. It should fail.
+### 2. Applies To (Dropdown)
+*   **Options**:
+    *   **All Users**: This rule applies to everyone (default).
+    *   **Specific Group** (e.g., "Engineering"): This rule ONLY applies to users in that group.
+*   **Why use it?** To segregate access. e.g., "Only Finance Group can access the Payroll Server".
 
-### Scenario B: The "Whitelist" (Allow Specific Access)
-**Concept**: "Only Engineering staff can enter the Server Room."
+### 3. Action (Dropdown)
+*   **Options**:
+    *   **Allow**: Traffic matches? Let it through.
+    *   **Deny**: Traffic matches? Block it immediately.
+*   **Logic**: Policies are checked in order (Priority). If a packet matches a "Deny" rule, it stops there.
 
-1.  **Prerequisite**: Create a Group called "Engineering" and add a User to it.
-2.  Go to **Policies** > **Create Policy**.
-3.  **Name**: `Access Server Room`
-4.  **Applies To**: `Engineering` (The Group).
-5.  **Destination**: `10.5.0.0/24` (The whole hallway of servers).
-6.  **Action**: `Allow`
-7.  **Click Create**.
+### 4. Destination (CIDR)
+*   **What is it?** The IP address of the **Server/Resource** inside your network.
+*   **Format**: CIDR notation.
+    *   **Specific IP**: `192.168.1.55/32` (Only this one single computer).
+    *   **Whole Network**: `192.168.1.0/24` (Any computer from 192.168.1.1 to 192.168.1.254).
+    *   **Everywhere**: `0.0.0.0/0` (The entire internet).
 
-### Scenario C: Validating the Connection
-1.  Create a User.
-2.  Download their WireGuard config or scan QR code.
-3.  Connect.
-4.  Try to reach the Internet (e.g., `google.com`).
-    *   *Success?* Your **Endpoint** and **NAT** (IP Forwarding) are working.
-5.  Try to reach a blocked IP.
-    *   *Failure?* Your **Policies** are working.
+### 5. Protocol (Dropdown)
+*   **Options**:
+    *   **All**: Any type of traffic (Web, Pings, SSH, Games). **(Most Common)**
+    *   **TCP**: Reliable connections (Websites, SSH, File Transfers).
+    *   **UDP**: Fast, connectionless (Video streaming, DNS, VOIP).
+    *   **ICMP**: Diagnostics (Ping).
+*   **Why use it?** If you only want to allow `Ping` (ICMP) but not `SSH` (TCP) to a server.
+
+### 6. Port (Optional)
+*   **What is it?** The specific "door" number on the destination server.
+*   **Examples**: `80` (Web), `443` (Secure Web), `22` (SSH), `3306` (MySQL).
+*   **Advice**: Leave empty to match ALL ports. Fill it in to be super strict (e.g., "Only allow Port 80").
+
+### 7. Priority
+*   **What is it?** A number (e.g., 10, 100).
+*   **How it works**: Lower numbers are checked **FIRST**.
+*   **Strategy**: Put your "Deny" rules with low numbers (e.g., 10) so they block bad stuff immediately. Put generic "Allow" rules with higher numbers (e.g., 100).
+
+---
+
+## ✅ Example: The "Whitelist" Strategy
+
+**Goal**: "Block everything by default, but allow Engineering to access the Server."
+
+1.  **Rule 1 (The Block)**
+    *   **Applies To**: All Users
+    *   **Destination**: `0.0.0.0/0` (Everything)
+    *   **Action**: **Deny**
+    *   **Priority**: `999` (Last resort)
+    *   *Result*: If no other rule matches, you get blocked.
+
+2.  **Rule 2 (The Access)**
+    *   **Applies To**: Engineering Group
+    *   **Destination**: `192.168.1.50/32` (The Server)
+    *   **Action**: **Allow**
+    *   **Priority**: `10` (Check first!)
+    *   *Result*: Engineering users match this rule first -> **Allowed**. Everyone else fails this rule, falls through to Rule 1 -> **Blocked**.
+
+---
+**Summary Checklist:**
+- [ ] Use `hostname -I` to find your IP.
+- [ ] In Setup, "Endpoint" is simply `YOUR_IP:51820`.
+- [ ] In Policies, "Destination /32" = Single IP, "/24" = Whole Network.
